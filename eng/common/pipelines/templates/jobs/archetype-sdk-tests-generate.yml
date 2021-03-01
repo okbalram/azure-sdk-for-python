@@ -18,15 +18,29 @@ jobs:
   variables:
     displayNameFilter: $[ coalesce(variables.jobMatrixFilter, '.*') ]
   pool:
-    name: Azure Pipelines
-    vmImage: ubuntu-18.04
+    name: azsdk-pool-mms-ubuntu-1804-general
+    vmImage: MMSUbuntu18.04
   displayName: Generate Job Matrix
   steps:
+    - checkout: none
+
+    - pwsh: |
+        git clone --no-checkout --filter=tree:0 git://github.com/$(Build.Repository.Name).git .
+        git sparse-checkout init
+        if ("${{ parameters.AdditionalParameters.ServiceDirectory }}") {
+          git sparse-checkout set eng sdk/${{ parameters.AdditionalParameters.ServiceDirectory}}
+        } else {
+          git sparse-checkout set eng
+        }
+        git checkout $(Build.SourceVersion)
+      workingDirectory: $(Build.Repository.LocalPath)
+
     - ${{ each config in parameters.MatrixConfigs }}:
       - ${{ if eq(config.GenerateVMJobs, 'true') }}:
         - task: Powershell@2
           inputs:
             pwsh: true
+            workingDirectory: $(Build.Repository.LocalPath)
             filePath: eng/common/scripts/job-matrix/Create-JobMatrix.ps1
             arguments: >
               -ConfigPath ${{ config.Path }}
@@ -41,6 +55,7 @@ jobs:
         - task: Powershell@2
           inputs:
             pwsh: true
+            workingDirectory: $(Build.Repository.LocalPath)
             filePath: eng/common/scripts/job-matrix/Create-JobMatrix.ps1
             arguments: >
               -ConfigPath ${{ config.Path }}
