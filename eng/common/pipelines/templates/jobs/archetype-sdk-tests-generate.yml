@@ -12,6 +12,10 @@ parameters:
   default: []
 - name: JobTemplatePath
   type: string
+# Set this to false to do a full checkout for private repositories with the azure pipelines service connection
+- name: SparseCheckout
+  type: boolean
+  default: true
 
 jobs:
 - job: generate_matrix
@@ -22,25 +26,27 @@ jobs:
     vmImage: MMSUbuntu18.04
   displayName: Generate Job Matrix
   steps:
-    - checkout: none
+    - ${{ if parameters.SparseCheckout }}:
+      - checkout: none
 
-    - pwsh: |
-        git clone --no-checkout --filter=tree:0 git://github.com/$(Build.Repository.Name).git .
-        git sparse-checkout init
-        if ("${{ parameters.AdditionalParameters.ServiceDirectory }}") {
-          git sparse-checkout set eng sdk/${{ parameters.AdditionalParameters.ServiceDirectory}}
-        } else {
-          git sparse-checkout set eng
-        }
-        git checkout $(Build.SourceVersion)
-      workingDirectory: $(Build.Repository.LocalPath)
+      - pwsh: |
+          git clone --no-checkout --filter=tree:0 git://github.com/$(Build.Repository.Name).git .
+          git sparse-checkout init
+          if ("${{ parameters.AdditionalParameters.ServiceDirectory }}") {
+            git sparse-checkout set eng sdk/${{ parameters.AdditionalParameters.ServiceDirectory}}
+          } else {
+            git sparse-checkout set eng
+          }
+          git checkout $(Build.SourceVersion)
+        workingDirectory: $(Build.Repository.LocalPath)
 
     - ${{ each config in parameters.MatrixConfigs }}:
       - ${{ if eq(config.GenerateVMJobs, 'true') }}:
         - task: Powershell@2
           inputs:
             pwsh: true
-            workingDirectory: $(Build.Repository.LocalPath)
+            ${{ if parameters.SparseCheckout }}:
+              workingDirectory: $(Build.Repository.LocalPath)
             filePath: eng/common/scripts/job-matrix/Create-JobMatrix.ps1
             arguments: >
               -ConfigPath ${{ config.Path }}
@@ -55,7 +61,8 @@ jobs:
         - task: Powershell@2
           inputs:
             pwsh: true
-            workingDirectory: $(Build.Repository.LocalPath)
+            ${{ if parameters.SparseCheckout }}:
+              workingDirectory: $(Build.Repository.LocalPath)
             filePath: eng/common/scripts/job-matrix/Create-JobMatrix.ps1
             arguments: >
               -ConfigPath ${{ config.Path }}
